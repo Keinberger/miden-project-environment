@@ -20,6 +20,5 @@ package = "miden:increment-note"
 [package.metadata.component.target.dependencies]
 "miden:counter-account" = { path = "../counter-account/wit/counter.wit" }
 
-
 [package.metadata.miden]
-project-kind = "note"
+project-kind = "note-script"

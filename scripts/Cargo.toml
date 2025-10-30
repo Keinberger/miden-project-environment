@@ -1,16 +1,13 @@
 [package]
-name = "helpers"
+name = "scripts"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-path = "helpers.rs"
-
 [dependencies]
-cargo-miden = { workspace = true }
 miden-client = { workspace = true }
 miden-core = { workspace = true }
 miden-mast-package = { workspace = true }
 miden-objects = { workspace = true }
-miden-lib = { workspace = true }
 rand = { workspace = true }
+helpers = { workspace = true }
+tokio = { workspace = true }

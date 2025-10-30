@@ -15,3 +15,6 @@ keystore/
 *.sqlite3
 
 contracts/**/target/
+
+# Ignore miden-client templates directory
+templates/
