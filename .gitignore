@@ -1,0 +1,17 @@
+# Ignore target directory
+target
+
+# Ignore packages directory
+packages/
+
+# Ignore Cargo.lock file
+Cargo.lock
+.env
+
+# Ignore keystore directory
+keystore/
+
+# Ignore .sqlite file
+*.sqlite3
+
+contracts/**/target/

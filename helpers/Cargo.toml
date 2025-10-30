@@ -1,0 +1,14 @@
+[package]
+name = "helpers"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "helpers.rs"
+
+[dependencies]
+miden-client = { workspace = true }
+miden-core = { workspace = true }
+miden-mast-package = { workspace = true }
+miden-objects = { workspace = true }
+rand = { workspace = true }

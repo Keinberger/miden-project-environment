@@ -1,0 +1,33 @@
+[package]
+name = "miden-project"
+version = "0.1.0"
+edition = "2021"
+
+# Note: Script binaries have to be added manually here for now
+
+[[bin]]
+name = "increment_count"
+path = "scripts/increment_count.rs"
+
+[workspace]
+members = [
+    "contracts/counter-account",
+    "contracts/increment-note",
+    "helpers"
+]
+
+[workspace.dependencies]
+miden = { version = "0.6" }
+miden-client = { version = "0.11" }
+miden-lib = { version = "0.11" }
+miden-objects = { version = "0.11", default-features = false, features = ["testing"] }
+miden-crypto = { version = "0.15.9", features = ["executable"] }
+miden-core = { version = "0.11" }
+miden-mast-package = { version = "0.18" }
+tokio = { version = "1.40", features = ["rt-multi-thread", "net", "macros", "fs"] }
+rand = { version = "0.9" }
+helpers = { path = "helpers" }
+
+# Workspace root depends on helpers for scripts and tests
+[dependencies]
+helpers = { workspace = true }
