@@ -6,48 +6,45 @@ The Miden workspace structure.
 
 ```
 miden-project/
-├── contracts/                   # Each contract as individual crate
+├── contracts/                   # Each contract as individual workspace member crate
 │   ├── counter-account/
 │   └── increment-note/
-├── scripts/                     # Script crate for on-chain interactions
-├── tests/                       # Tests crate
-├── helpers/                     # Temporary helper crate (will be removed in future)
-├── Cargo.toml                   # Workspace root
+├── src/                         # Root package source
+│   ├── bin/                     # Rust binaries for on-chain interactions
+│   │   └── increment_count.rs
+│   ├── helpers.rs               # Temporary helper module (will be removed in future)
+│   └── lib.rs
+├── tests/                       # Tests
+├── Cargo.toml
 └── rust-toolchain.toml          # Temporary Rust toolchain specification (will be removed in the future)
 ```
 
-> **Note**: The `helpers/` directory and `rust-toolchain.toml` file are temporary and exist only to make working with the Rust compiler easier. They will be removed in the future.
+> **Note**: The `helpers.rs` module and `rust-toolchain.toml` file are temporary and exist only to make working with the Rust compiler easier. They will be removed in the future.
 
-## **Design Philosophy**
+## **Project Structure**
 
-This workspace structure provides a baseline for building complex applications. Both `scripts/` and `tests/` are organized as their own separate crates to accommodate the needs of growing applications.
+This project uses a hybrid package-workspace structure where:
 
-As applications increase in complexity, they often require:
-
-- Custom dependencies and version requirements specific to scripts or tests
-- Sophisticated tooling and utilities
-- Independent configuration and build settings
-- Clear separation of concerns
-
-By structuring scripts and tests as separate crates from the start, this workspace provides the flexibility to scale with your application's needs.
-
-Furthermore, in the future both the tests and scripts will be natively integrated into the `midenup` CLI tooling, which will elevate the development experience.
+- The root is both a Rust package and a workspace
+- Contracts are organized as separate workspace member crates
+- Scripts for on-chain interactions are Rust binaries in `src/bin/`
+- Tests are integration tests in the `tests/` directory
 
 ## **Scripts: On-Chain Interactions**
 
-Code for making on-chain interactions with the contracts are placed as Rust binaries inside of the `scripts/` crate. Each binary represents a specific interaction or script that can be executed against the contracts.
+Code for making on-chain interactions with the contracts are placed as Rust binaries inside of `src/bin/`. Each binary represents a specific interaction or script that can be executed against the contracts.
 
 ## **Tests**
 
-Tests are organized in the `tests/` crate, with test files located in the `tests/tests/` directory.
+Tests are organized as integration tests in the `tests/` directory, which test the root package and its binaries.
 
 ## **Commands**
 
 ```bash
 # Run any script binary
-cd scripts && cargo run --bin increment_count
+cargo run --bin increment_count
 
 # Run tests
-cd tests && cargo test                      # Run all tests
-cd tests && cargo test counter_test         # Run specific test file
+cargo test                      # Run all tests
+cargo test counter_test         # Run specific test
 ```
