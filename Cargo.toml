@@ -1,17 +1,10 @@
-[workspace]
-members = [
-    "contracts/counter-account",
-    "contracts/increment-note",
-    "helpers",
-    "scripts",
-    "tests"
-]
-resolver = "2"
+[package]
+name = "miden-project"
+version = "0.1.0"
 edition = "2021"
 
-[workspace.dependencies]
-miden = { version = "0.6" }
-cargo-miden = { git = "https://github.com/0xMiden/compiler.git", branch = "next", package = "cargo-miden" }
+[dependencies]
+cargo-miden = { git = "https://github.com/0xMiden/compiler.git", branch = "greenhat/i738-wrong-root-package", package = "cargo-miden" }
 miden-client = { version = "0.11", features = ["tonic", "sqlite"] }
 miden-lib = { version = "0.11" }
 miden-objects = { version = "0.11", default-features = false, features = ["testing"] }
@@ -20,6 +13,16 @@ miden-core = { version = "0.18" }
 miden-mast-package = { version = "0.17.1", default_features = false }
 tokio = { version = "1.40", features = ["rt-multi-thread", "net", "macros", "fs"] }
 rand = { version = "0.9" }
-helpers = { path = "helpers" }
-scripts = { path = "scripts" }
-tests = { path = "tests" }
+anyhow = "1.0"
+
+# Workspace configuration for contracts crates
+
+[workspace]
+members = [
+    "contracts/counter-account",
+    "contracts/increment-note",
+]
+resolver = "2"
+
+[workspace.dependencies]
+miden = { version = "0.6" }

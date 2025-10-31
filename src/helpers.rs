@@ -41,10 +41,10 @@ pub async fn setup_client() -> Result<ClientSetup, Box<dyn std::error::Error>> {
     let rpc_api = Arc::new(TonicRpcClient::new(&endpoint, timeout_ms));
 
     // Initialize keystore
-    let keystore_path = PathBuf::from("../keystore");
+    let keystore_path = PathBuf::from("./keystore");
     let keystore = Arc::new(FilesystemKeyStore::<StdRng>::new(keystore_path).unwrap());
 
-    let store_path = PathBuf::from("../store.sqlite3");
+    let store_path = PathBuf::from("./store.sqlite3");
     let client = ClientBuilder::new()
         .rpc(rpc_api)
         .sqlite_store(store_path.to_str().unwrap())

@@ -1,6 +1,6 @@
-use helpers::{
+use miden_project::{
     build_project_in_dir, create_account_from_package, create_basic_wallet_account,
-    create_note_from_package, setup_client, AccountCreationConfig, NoteCreationConfig, ClientSetup,
+    create_note_from_package, setup_client, AccountCreationConfig, ClientSetup, NoteCreationConfig,
 };
 
 use miden_client::{
@@ -11,23 +11,22 @@ use miden_client::{
 use std::path::Path;
 use std::sync::Arc;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // instantiate client
+#[tokio::test]
+async fn test_increment_count() -> anyhow::Result<()> {
+    // Test that after executing the increment note, the counter value is incremented by 1
     let ClientSetup {
         mut client,
         keystore,
     } = setup_client().await.unwrap();
 
-    let sync_summary = client.sync_state().await.unwrap();
-    println!("Latest block: {}", sync_summary.block_num);
+    client.sync_state().await.unwrap();
 
     let contract_package = Arc::new(build_project_in_dir(
-        Path::new("../contracts/counter-account"),
+        Path::new("./contracts/counter-account"),
         true,
     ));
     let note_package = Arc::new(build_project_in_dir(
-        Path::new("../contracts/increment-note"),
+        Path::new("./contracts/increment-note"),
         true,
     ));
 
@@ -42,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // create counter account
-    let counter_account =
+    let mut counter_account =
         create_account_from_package(&mut client, contract_package.clone(), counter_cfg)
             .await
             .unwrap();
@@ -52,7 +51,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sender_account = create_basic_wallet_account(&mut client, keystore.clone(), sender_cfg)
         .await
         .unwrap();
-    println!("Sender account ID: {:?}", sender_account.id().to_hex());
 
     // build increment note
     let counter_note = create_note_from_package(
@@ -61,7 +59,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sender_account.id(),
         NoteCreationConfig::default(),
     );
-    println!("Counter note hash: {:?}", counter_note.id().to_hex());
 
     // build and submit transaction to publish note
     let note_publish_request = TransactionRequestBuilder::new()
@@ -76,11 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .submit_transaction(note_publish_tx_result.clone())
         .await;
     client.sync_state().await.unwrap();
-
-    println!(
-        "Note publish transaction ID: {:?}",
-        note_publish_tx_result.executed_transaction().id().to_hex()
-    );
 
     let consume_note_request = TransactionRequestBuilder::new()
         .unauthenticated_input_notes([(counter_note.clone(), None)])
@@ -97,15 +89,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
 
-    println!(
-        "Consume transaction ID: {:?}",
-        consume_tx_result.executed_transaction().id().to_hex()
-    );
+    client.sync_state().await.unwrap();
 
-    println!(
-        "Account delta: {:?}",
-        consume_tx_result.executed_transaction().account_delta()
-    );
+    let counter_account_record = client
+        .get_account(counter_account.id())
+        .await
+        .unwrap()
+        .unwrap();
 
+    counter_account = counter_account_record.account().clone();
+
+    let count = counter_account
+        .storage()
+        .get_map_item(0, count_storage_key)
+        .unwrap();
+
+    // Assert that the count value is equal to 1 after consuming the note
+    assert_eq!(
+        count,
+        Word::from([Felt::new(0), Felt::new(0), Felt::new(0), Felt::new(1)]),
+        "Count value is not equal to 1"
+    );
+    println!("Test passed!");
     Ok(())
 }
