@@ -10,7 +10,7 @@ use miden_client::{
     },
     auth::AuthSecretKey,
     builder::ClientBuilder,
-    crypto::FeltRng,
+    crypto::{FeltRng, SecretKey},
     keystore::FilesystemKeyStore,
     note::{
         Note, NoteExecutionHint, NoteInputs, NoteMetadata, NoteRecipient, NoteScript, NoteTag,
@@ -20,7 +20,6 @@ use miden_client::{
     utils::Deserializable,
     Client, ClientError,
 };
-use miden_core::crypto::dsa::rpo_falcon512::SecretKey;
 use miden_core::{Felt, FieldElement};
 use miden_mast_package::Package;
 use miden_objects::account::{
@@ -29,13 +28,13 @@ use miden_objects::account::{
 use rand::{rngs::StdRng, RngCore};
 
 /// Test setup configuration
-pub struct ScriptSetup {
+pub struct ClientSetup {
     pub client: Client<FilesystemKeyStore<StdRng>>,
     pub keystore: Arc<FilesystemKeyStore<StdRng>>,
 }
 
 /// Initialize test infrastructure with client, keystore, and temporary directory
-pub async fn setup_script() -> Result<ScriptSetup, Box<dyn std::error::Error>> {
+pub async fn setup_client() -> Result<ClientSetup, Box<dyn std::error::Error>> {
     // Initialize RPC connection
     let endpoint = Endpoint::testnet();
     let timeout_ms = 10_000;
@@ -54,7 +53,7 @@ pub async fn setup_script() -> Result<ScriptSetup, Box<dyn std::error::Error>> {
         .build()
         .await?;
 
-    Ok(ScriptSetup { client, keystore })
+    Ok(ClientSetup { client, keystore })
 }
 
 pub fn build_project_in_dir(dir: &std::path::Path, release: bool) -> Package {

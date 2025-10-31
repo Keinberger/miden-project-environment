@@ -1,6 +1,6 @@
 use helpers::{
     build_project_in_dir, create_account_from_package, create_basic_wallet_account,
-    create_note_from_package, setup_script, AccountCreationConfig, NoteCreationConfig, ScriptSetup,
+    create_note_from_package, setup_client, AccountCreationConfig, NoteCreationConfig, ClientSetup,
 };
 
 use miden_client::{
@@ -14,10 +14,10 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // instantiate client
-    let ScriptSetup {
+    let ClientSetup {
         mut client,
         keystore,
-    } = setup_script().await?;
+    } = setup_client().await.unwrap();
 
     let sync_summary = client.sync_state().await.unwrap();
     println!("Latest block: {}", sync_summary.block_num);
@@ -32,11 +32,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     // Create the counter account with initial storage and no-auth auth component
-    let key = Word::from([Felt::new(0), Felt::new(0), Felt::new(0), Felt::new(1)]);
-    let value = Word::from([Felt::new(0), Felt::new(0), Felt::new(0), Felt::new(1)]);
+    let count_storage_key = Word::from([Felt::new(0), Felt::new(0), Felt::new(0), Felt::new(1)]);
+    let initial_count = Word::from([Felt::new(0), Felt::new(0), Felt::new(0), Felt::new(0)]);
     let counter_cfg = AccountCreationConfig {
         storage_slots: vec![miden_client::account::StorageSlot::Map(
-            StorageMap::with_entries([(key, value)]).unwrap(),
+            StorageMap::with_entries([(count_storage_key, initial_count)]).unwrap(),
         )],
         ..Default::default()
     };
