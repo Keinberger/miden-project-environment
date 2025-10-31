@@ -1,8 +1,0 @@
-store_filepath = "store.sqlite3"
-secret_keys_directory = "keystore"
-token_symbol_map_filepath = "token_symbol_map.toml"
-component_template_directory = "./templates"
-
-[rpc]
-endpoint = "https://rpc.testnet.miden.io"
-timeout_ms = 10000
