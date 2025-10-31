@@ -1,4 +1,4 @@
-use helpers::{
+use integration::helpers::{
     build_project_in_dir, create_account_from_package, create_basic_wallet_account,
     create_note_from_package, setup_client, AccountCreationConfig, ClientSetup, NoteCreationConfig,
 };
@@ -11,7 +11,7 @@ use miden_client::{
 use std::path::Path;
 use std::sync::Arc;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[tokio::test]
 async fn test_increment_count() -> anyhow::Result<()> {
     // Test that after executing the increment note, the counter value is incremented by 1
     let ClientSetup {
@@ -69,10 +69,10 @@ async fn test_increment_count() -> anyhow::Result<()> {
         .new_transaction(sender_account.id(), note_publish_request)
         .await
         .unwrap();
-    let _ = client
+    client
         .submit_transaction(note_publish_tx_result.clone())
-        .await;
-    client.sync_state().await.unwrap();
+        .await?;
+    client.sync_state().await?;
 
     let consume_note_request = TransactionRequestBuilder::new()
         .unauthenticated_input_notes([(counter_note.clone(), None)])
@@ -84,12 +84,9 @@ async fn test_increment_count() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let _ = client
-        .submit_transaction(consume_tx_result.clone())
-        .await
-        .unwrap();
+    client.submit_transaction(consume_tx_result.clone()).await?;
 
-    client.sync_state().await.unwrap();
+    client.sync_state().await?;
 
     let counter_account_record = client
         .get_account(counter_account.id())

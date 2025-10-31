@@ -1,53 +1,144 @@
 # Miden Project
 
-The Miden workspace structure.
+A workspace structure for building Miden smart contract applications.
+
+## **Installation**
+
+Before getting started, ensure you have the following prerequisites:
+
+1. **Install Rust** - Make sure you have Rust installed on your system. If not, install it from [rustup.rs](https://rustup.rs/)
+
+2. **Install midenup toolchain** - Follow the installation instructions at: <https://github.com/0xMiden/midenup>
 
 ## **Structure**
 
-```
+```text
 miden-project/
 ├── contracts/                   # Each contract as individual crate
-│   ├── counter-account/
-│   └── increment-note/
-├── scripts/                     # Script crate for on-chain interactions
-├── tests/                       # Tests crate
-├── helpers/                     # Temporary helper crate (will be removed in future)
+│   ├── counter-account/         # Example: Counter account contract
+│   └── increment-note/          # Example: Increment note contract
+├── integration/                 # Integration crate (scripts + tests)
+│   ├── src/
+│   │   ├── bin/                 # Rust binaries for on-chain interactions
+│   │   ├── helpers.rs           # Temporary helper file (do not modify!)
+│   │   └── lib.rs
+│   └── tests/                   # Test files
 ├── Cargo.toml                   # Workspace root
-└── rust-toolchain.toml          # Temporary Rust toolchain specification (will be removed in the future)
+└── rust-toolchain.toml          # Temporary Rust toolchain specification
 ```
-
-> **Note**: The `helpers/` directory and `rust-toolchain.toml` file are temporary and exist only to make working with the Rust compiler easier. They will be removed in the future.
 
 ## **Design Philosophy**
 
-This workspace structure provides a baseline for building complex applications. Both `scripts/` and `tests/` are organized as their own separate crates to accommodate the needs of growing applications.
+This workspace follows a clean separation of concerns:
 
-As applications increase in complexity, they often require:
+### **Contracts Folder - Miden Development**
 
-- Custom dependencies and version requirements specific to scripts or tests
-- Sophisticated tooling and utilities
-- Independent configuration and build settings
-- Clear separation of concerns
+The `contracts/` folder is your primary working directory when writing Miden smart contract code. Each contract is organized as its own individual crate, allowing for:
 
-By structuring scripts and tests as separate crates from the start, this workspace provides the flexibility to scale with your application's needs.
+- Independent versioning and dependencies
+- Clear isolation between different contracts
+- Easy contract management and modularization
 
-Furthermore, in the future both the tests and scripts will be natively integrated into the `midenup` CLI tooling, which will elevate the development experience.
+When you're working on Miden Rust code (writing smart contracts), you'll be working in the `contracts/` directory.
 
-## **Scripts: On-Chain Interactions**
+### **Integration Crate - Scripts and Testing**
 
-Code for making on-chain interactions with the contracts are placed as Rust binaries inside of the `scripts/` crate. Each binary represents a specific interaction or script that can be executed against the contracts.
+The `integration/` crate is your working directory for interacting with compiled contracts. All on-chain interactions, scripts, and tests are housed within this single crate. This includes:
 
-## **Tests**
+- **Binaries** (`src/bin/`): Rust executables for deploying and interacting with your contracts on-chain
+- **Tests** (`tests/`): Integration tests for validating your contract behavior
 
-Tests are organized in the `tests/` crate, with test files located in the `tests/tests/` directory.
+This structure provides flexibility as your application grows, allowing you to add custom dependencies, sophisticated tooling, and independent configuration specific to your deployment and testing needs.
+
+> **Important Note**: The `helpers.rs` file inside the `integration/` crate is temporary and exists only to facilitate current development workflows. **Do not modify this file unless you know what you are doing!** It will be removed in future versions.
+
+## **Adding New Contracts**
+
+To create a new contract crate, run the following command from the workspace root:
+
+```bash
+miden cargo-miden new --account contracts/my-account
+```
+
+This will scaffold a new contract crate inside the `contracts/` directory with all the necessary boilerplate.
+
+## **Adding Binaries for On-Chain Interactions**
+
+Binaries are used for deploying contracts and performing on-chain interactions. To add a new binary:
+
+1. Create a new `.rs` file in `integration/src/bin/` (e.g., `deploy_contract.rs`)
+2. Write your binary code as a standard Rust executable with a `main()` function
+3. Run the binary using the commands shown below
+
+Example binary structure:
+
+```rust
+// integration/src/bin/deploy_contract.rs
+fn main() {
+    println!("Deploying contract...");
+    // Your deployment logic here
+}
+```
+
+## **Testing Your Contracts**
+
+Tests are located in `integration/tests/`. To add a new test:
+
+1. Create a new test file in `integration/tests/` (e.g., `my_contract_test.rs`)
+2. Write your test functions using the standard Rust testing framework
+3. Run tests using the commands shown below
+
+Example test structure:
+
+```rust
+// integration/tests/my_contract_test.rs
+#[test]
+fn test_my_contract() {
+    // Your test logic here
+    assert_eq!(1 + 1, 2);
+}
+```
 
 ## **Commands**
 
-```bash
-# Run any script binary
-cd scripts && cargo run --bin increment_count
+### Compile a Contract
 
-# Run tests
-cd tests && cargo test                      # Run all tests
-cd tests && cargo test counter_test         # Run specific test file
+```bash
+# Compile a specific contract
+miden cargo-miden build --manifest-path contracts/counter-account/Cargo.toml
+
+# Or navigate to the contract directory
+cd contracts/counter-account
+miden cargo-miden build
 ```
+
+### Run a Binary
+
+```bash
+# Navigate to integration crate and run a binary
+cd integration
+cargo run --bin increment_count
+```
+
+### Run Tests
+
+```bash
+# Navigate to integration crate and run tests
+cd integration
+cargo test                      # Run all tests
+cargo test counter_test         # Run specific test file
+```
+
+## **Extending the Workspace**
+
+If you need to extend the workspace with new crates (for example, to add libraries or additional tools), it is recommended to add these new crates in the root of the project directory. This helps keep the project structure clean and makes it easier to manage dependencies and workspace configuration.
+
+To add a new crate to the workspace:
+
+1. From the project root, run:
+   ```bash
+   cargo new my-new-crate
+   ```
+2. Then add the crate path (e.g., `my-new-crate`) to the `[workspace].members` section of your `Cargo.toml`.
+
+**Note:** Avoid adding new crates as subdirectories under `contracts/` or `integration/`, unless they are intended to be contract crates or part of integration specifically. Keeping new crates at the root makes the project easier to understand and maintain.

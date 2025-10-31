@@ -1,12 +1,13 @@
-use helpers::{
-    build_project_in_dir, create_account_from_package, create_basic_wallet_account,
-    create_note_from_package, setup_client, AccountCreationConfig, NoteCreationConfig, ClientSetup,
+use integration::helpers::{
+    AccountCreationConfig, ClientSetup, NoteCreationConfig, build_project_in_dir,
+    create_account_from_package, create_basic_wallet_account, create_note_from_package,
+    setup_client,
 };
 
 use miden_client::{
+    Felt, Word,
     account::StorageMap,
     transaction::{OutputNote, TransactionRequestBuilder},
-    Felt, Word,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -72,10 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .new_transaction(sender_account.id(), note_publish_request)
         .await
         .unwrap();
-    let _ = client
+    client
         .submit_transaction(note_publish_tx_result.clone())
-        .await;
-    client.sync_state().await.unwrap();
+        .await?;
+    client.sync_state().await?;
 
     println!(
         "Note publish transaction ID: {:?}",
@@ -92,10 +93,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .unwrap();
 
-    let _ = client
+    client
         .submit_transaction(consume_tx_result.clone())
-        .await
-        .unwrap();
+        .await?;
 
     println!(
         "Consume transaction ID: {:?}",

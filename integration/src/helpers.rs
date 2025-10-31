@@ -27,13 +27,20 @@ use miden_objects::account::{
 };
 use rand::{rngs::StdRng, RngCore};
 
-/// Test setup configuration
+/// Test setup configuration containing initialized client and keystore
 pub struct ClientSetup {
     pub client: Client<FilesystemKeyStore<StdRng>>,
     pub keystore: Arc<FilesystemKeyStore<StdRng>>,
 }
 
-/// Initialize test infrastructure with client, keystore, and temporary directory
+/// Initializes test infrastructure with client, keystore, and temporary directory
+///
+/// # Returns
+/// A `ClientSetup` containing the initialized client and keystore
+///
+/// # Errors
+/// Returns an error if RPC connection fails, keystore initialization fails,
+/// or client building fails
 pub async fn setup_client() -> Result<ClientSetup, Box<dyn std::error::Error>> {
     // Initialize RPC connection
     let endpoint = Endpoint::testnet();
@@ -56,22 +63,32 @@ pub async fn setup_client() -> Result<ClientSetup, Box<dyn std::error::Error>> {
     Ok(ClientSetup { client, keystore })
 }
 
+/// Builds a Miden project in the specified directory
+///
+/// # Arguments
+/// * `dir` - Path to the directory containing the Cargo.toml
+/// * `release` - Whether to build in release mode
+///
+/// # Returns
+/// The compiled `Package`
+///
+/// # Panics
+/// Panics if compilation fails or if the output is not in the expected format
 pub fn build_project_in_dir(dir: &std::path::Path, release: bool) -> Package {
-    let profile: &str = if release { "--release" } else { "--debug" };
-    // Compute manifest path string once
+    let profile = if release { "--release" } else { "--debug" };
     let manifest_path = dir.join("Cargo.toml");
-    let manifest_arg = manifest_path.to_string_lossy().to_string();
+    let manifest_arg = manifest_path.to_string_lossy();
 
     let args = vec![
-        "cargo".to_string(),
-        "miden".to_string(),
-        "build".to_string(),
-        profile.to_string(),
-        "--manifest-path".to_string(),
-        manifest_arg.to_string(),
+        "cargo",
+        "miden",
+        "build",
+        profile,
+        "--manifest-path",
+        &manifest_arg,
     ];
 
-    let output = run(args.into_iter(), OutputType::Masm)
+    let output = run(args.into_iter().map(String::from), OutputType::Masm)
         .expect("Failed to compile with the release profile")
         .expect("'cargo miden build --release' should return Some(CommandOutput)");
     let expected_masm_path = match output {
@@ -106,6 +123,17 @@ impl Default for AccountCreationConfig {
     }
 }
 
+/// Creates an account component from a compiled package
+///
+/// # Arguments
+/// * `package` - The compiled package containing account component metadata
+/// * `config` - Configuration for account creation
+///
+/// # Returns
+/// An `AccountComponent` configured according to the provided config
+///
+/// # Panics
+/// Panics if the package doesn't contain account component metadata
 pub fn account_component_from_package(
     package: Arc<Package>,
     config: &AccountCreationConfig,
@@ -134,7 +162,18 @@ pub fn account_component_from_package(
     account_component
 }
 
-/// Helper to create an account with a custom component from a package
+/// Creates an account with a custom component from a compiled package
+///
+/// # Arguments
+/// * `client` - The Miden client instance
+/// * `package` - The compiled package containing the account component
+/// * `config` - Configuration for account creation
+///
+/// # Returns
+/// The created `Account`
+///
+/// # Errors
+/// Returns `ClientError` if account creation or client operations fail
 pub async fn create_account_from_package(
     client: &mut Client<FilesystemKeyStore<StdRng>>,
     package: Arc<Package>,
@@ -186,7 +225,16 @@ impl Default for NoteCreationConfig {
     }
 }
 
-/// Helper to create a note from a compiled package
+/// Creates a note from a compiled package
+///
+/// # Arguments
+/// * `client` - The Miden client instance
+/// * `package` - The compiled package containing the note script
+/// * `sender_id` - The ID of the account sending the note
+/// * `config` - Configuration for note creation
+///
+/// # Returns
+/// The created `Note`
 pub fn create_note_from_package(
     client: &mut Client<FilesystemKeyStore<StdRng>>,
     package: Arc<Package>,
@@ -215,6 +263,18 @@ pub fn create_note_from_package(
     Note::new(config.assets, metadata, recipient)
 }
 
+/// Creates a basic wallet account with authentication
+///
+/// # Arguments
+/// * `client` - The Miden client instance
+/// * `keystore` - The keystore for storing authentication keys
+/// * `config` - Configuration for account creation
+///
+/// # Returns
+/// The created `Account` with basic wallet functionality
+///
+/// # Errors
+/// Returns `ClientError` if account creation, key generation, or keystore operations fail
 pub async fn create_basic_wallet_account(
     client: &mut Client<FilesystemKeyStore<StdRng>>,
     keystore: Arc<FilesystemKeyStore<StdRng>>,
