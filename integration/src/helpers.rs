@@ -1,7 +1,8 @@
 //! Common helper functions for scripts and tests
 
-use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, path::Path, sync::Arc};
 
+use anyhow::{bail, Context, Result};
 use cargo_miden::{run, OutputType};
 use miden_client::{
     account::{
@@ -18,7 +19,7 @@ use miden_client::{
     },
     rpc::{Endpoint, TonicRpcClient},
     utils::Deserializable,
-    Client, ClientError,
+    Client,
 };
 use miden_core::{Felt, FieldElement};
 use miden_mast_package::Package;
@@ -33,7 +34,7 @@ pub struct ClientSetup {
     pub keystore: Arc<FilesystemKeyStore<StdRng>>,
 }
 
-/// Initializes test infrastructure with client, keystore, and temporary directory
+/// Initializes test infrastructure with client and keystore
 ///
 /// # Returns
 /// A `ClientSetup` containing the initialized client and keystore
@@ -41,24 +42,33 @@ pub struct ClientSetup {
 /// # Errors
 /// Returns an error if RPC connection fails, keystore initialization fails,
 /// or client building fails
-pub async fn setup_client() -> Result<ClientSetup, Box<dyn std::error::Error>> {
+pub async fn setup_client() -> Result<ClientSetup> {
     // Initialize RPC connection
     let endpoint = Endpoint::testnet();
     let timeout_ms = 10_000;
     let rpc_api = Arc::new(TonicRpcClient::new(&endpoint, timeout_ms));
 
     // Initialize keystore
-    let keystore_path = PathBuf::from("../keystore");
-    let keystore = Arc::new(FilesystemKeyStore::<StdRng>::new(keystore_path).unwrap());
+    let keystore_path = std::path::PathBuf::from("../keystore");
 
-    let store_path = PathBuf::from("../store.sqlite3");
+    let keystore = Arc::new(
+        FilesystemKeyStore::<StdRng>::new(keystore_path)
+            .context("Failed to initialize keystore")?,
+    );
+
+    let store_path = std::path::PathBuf::from("../store.sqlite3");
+    let store_path_str = store_path
+        .to_str()
+        .context("Store path contains invalid UTF-8")?;
+
     let client = ClientBuilder::new()
         .rpc(rpc_api)
-        .sqlite_store(store_path.to_str().unwrap())
+        .sqlite_store(store_path_str)
         .authenticator(keystore.clone())
         .in_debug_mode(true.into())
         .build()
-        .await?;
+        .await
+        .context("Failed to build Miden client")?;
 
     Ok(ClientSetup { client, keystore })
 }
@@ -72,9 +82,9 @@ pub async fn setup_client() -> Result<ClientSetup, Box<dyn std::error::Error>> {
 /// # Returns
 /// The compiled `Package`
 ///
-/// # Panics
-/// Panics if compilation fails or if the output is not in the expected format
-pub fn build_project_in_dir(dir: &std::path::Path, release: bool) -> Package {
+/// # Errors
+/// Returns an error if compilation fails or if the output is not in the expected format
+pub fn build_project_in_dir(dir: &Path, release: bool) -> Result<Package> {
     let profile = if release { "--release" } else { "--debug" };
     let manifest_path = dir.join("Cargo.toml");
     let manifest_arg = manifest_path.to_string_lossy();
@@ -89,18 +99,23 @@ pub fn build_project_in_dir(dir: &std::path::Path, release: bool) -> Package {
     ];
 
     let output = run(args.into_iter().map(String::from), OutputType::Masm)
-        .expect("Failed to compile with the release profile")
-        .expect("'cargo miden build --release' should return Some(CommandOutput)");
-    let expected_masm_path = match output {
+        .context("Failed to compile project")?
+        .context("Cargo miden build returned None")?;
+
+    let artifact_path = match output {
         cargo_miden::CommandOutput::BuildCommandOutput { output } => match output {
             cargo_miden::BuildOutput::Masm { artifact_path } => artifact_path,
-            other => panic!("Expected Masm output, got {other:?}"),
+            other => bail!("Expected Masm output, got {:?}", other),
         },
-        other => panic!("Expected BuildCommandOutput, got {other:?}"),
+        other => bail!("Expected BuildCommandOutput, got {:?}", other),
     };
 
-    let package_bytes = std::fs::read(expected_masm_path).unwrap();
-    Package::read_from_bytes(&package_bytes).unwrap()
+    let package_bytes = std::fs::read(&artifact_path).context(format!(
+        "Failed to read compiled package from {}",
+        artifact_path.display()
+    ))?;
+
+    Package::read_from_bytes(&package_bytes).context("Failed to deserialize package from bytes")
 }
 
 /// Configuration for creating an account with a custom component
@@ -132,34 +147,34 @@ impl Default for AccountCreationConfig {
 /// # Returns
 /// An `AccountComponent` configured according to the provided config
 ///
-/// # Panics
-/// Panics if the package doesn't contain account component metadata
+/// # Errors
+/// Returns an error if the package doesn't contain account component metadata or deserialization fails
 pub fn account_component_from_package(
     package: Arc<Package>,
     config: &AccountCreationConfig,
-) -> AccountComponent {
-    let account_component = match package.account_component_metadata_bytes.as_deref() {
-        None => panic!("no account component metadata present"),
-        Some(bytes) => {
-            let metadata = AccountComponentMetadata::read_from_bytes(bytes).unwrap();
-            let template =
-                AccountComponentTemplate::new(metadata, package.unwrap_library().as_ref().clone());
+) -> Result<AccountComponent> {
+    let bytes = package
+        .account_component_metadata_bytes
+        .as_deref()
+        .context("Package missing account component metadata")?;
 
-            let component =
-                AccountComponent::new(template.library().clone(), config.storage_slots.clone())
-                    .unwrap();
+    let metadata = AccountComponentMetadata::read_from_bytes(bytes)
+        .context("Failed to deserialize account component metadata")?;
 
-            // Use supported types from config if provided, otherwise default to RegularAccountImmutableCode
-            let supported_types = if let Some(types) = &config.supported_types {
-                BTreeSet::from_iter(types.clone())
-            } else {
-                BTreeSet::from_iter([AccountType::RegularAccountImmutableCode])
-            };
+    let library = package.unwrap_library();
+    let template = AccountComponentTemplate::new(metadata, library.as_ref().clone());
 
-            component.with_supported_types(supported_types)
-        }
+    let component = AccountComponent::new(template.library().clone(), config.storage_slots.clone())
+        .context("Failed to create account component")?;
+
+    // Use supported types from config if provided, otherwise default to RegularAccountImmutableCode
+    let supported_types = if let Some(types) = &config.supported_types {
+        BTreeSet::from_iter(types.clone())
+    } else {
+        BTreeSet::from_iter([AccountType::RegularAccountImmutableCode])
     };
-    account_component
+
+    Ok(component.with_supported_types(supported_types))
 }
 
 /// Creates an account with a custom component from a compiled package
@@ -173,19 +188,17 @@ pub fn account_component_from_package(
 /// The created `Account`
 ///
 /// # Errors
-/// Returns `ClientError` if account creation or client operations fail
+/// Returns an error if account creation or client operations fail
 pub async fn create_account_from_package(
     client: &mut Client<FilesystemKeyStore<StdRng>>,
     package: Arc<Package>,
     config: AccountCreationConfig,
-) -> Result<Account, ClientError> {
-    let account_component: AccountComponent = account_component_from_package(package, &config);
+) -> Result<Account> {
+    let account_component = account_component_from_package(package, &config)
+        .context("Failed to create account component from package")?;
 
     let mut init_seed = [0_u8; 32];
     client.rng().fill_bytes(&mut init_seed);
-
-    // Sync client state to get latest block info
-    let _sync_summary = client.sync_state().await.unwrap();
 
     let (account, seed) = AccountBuilder::new(init_seed)
         .account_type(config.account_type)
@@ -193,11 +206,14 @@ pub async fn create_account_from_package(
         .with_component(account_component)
         .with_auth_component(NoAuth)
         .build()
-        .unwrap();
+        .context("Failed to build account")?;
 
     println!("Account ID: {:?}", account.id());
 
-    client.add_account(&account, Some(seed), false).await?;
+    client
+        .add_account(&account, Some(seed), false)
+        .await
+        .context("Failed to add account to client")?;
 
     Ok(account)
 }
@@ -216,7 +232,9 @@ impl Default for NoteCreationConfig {
     fn default() -> Self {
         Self {
             note_type: NoteType::Public,
-            tag: NoteTag::for_local_use_case(0, 0).unwrap(),
+            // Note: This should never fail for valid inputs (0, 0)
+            tag: NoteTag::for_local_use_case(0, 0)
+                .expect("Failed to create default note tag with (0, 0)"),
             assets: Default::default(),
             inputs: Default::default(),
             execution_hint: NoteExecutionHint::always(),
@@ -235,12 +253,15 @@ impl Default for NoteCreationConfig {
 ///
 /// # Returns
 /// The created `Note`
+///
+/// # Errors
+/// Returns an error if note creation fails
 pub fn create_note_from_package(
     client: &mut Client<FilesystemKeyStore<StdRng>>,
     package: Arc<Package>,
     sender_id: AccountId,
     config: NoteCreationConfig,
-) -> Note {
+) -> Result<Note> {
     let note_program = package.unwrap_program();
     let note_script = NoteScript::from_parts(
         note_program.mast_forest().clone(),
@@ -248,7 +269,7 @@ pub fn create_note_from_package(
     );
 
     let serial_num = client.rng().draw_word();
-    let note_inputs = NoteInputs::new(config.inputs).unwrap();
+    let note_inputs = NoteInputs::new(config.inputs).context("Failed to create note inputs")?;
     let recipient = NoteRecipient::new(serial_num, note_script, note_inputs);
 
     let metadata = NoteMetadata::new(
@@ -258,9 +279,9 @@ pub fn create_note_from_package(
         config.execution_hint,
         config.aux,
     )
-    .unwrap();
+    .context("Failed to create note metadata")?;
 
-    Note::new(config.assets, metadata, recipient)
+    Ok(Note::new(config.assets, metadata, recipient))
 }
 
 /// Creates a basic wallet account with authentication
@@ -274,19 +295,16 @@ pub fn create_note_from_package(
 /// The created `Account` with basic wallet functionality
 ///
 /// # Errors
-/// Returns `ClientError` if account creation, key generation, or keystore operations fail
+/// Returns an error if account creation, key generation, or keystore operations fail
 pub async fn create_basic_wallet_account(
     client: &mut Client<FilesystemKeyStore<StdRng>>,
     keystore: Arc<FilesystemKeyStore<StdRng>>,
     config: AccountCreationConfig,
-) -> Result<Account, ClientError> {
+) -> Result<Account> {
     let mut init_seed = [0_u8; 32];
     client.rng().fill_bytes(&mut init_seed);
 
     let key_pair = SecretKey::with_rng(client.rng());
-
-    // Sync client state to get latest block info
-    let _sync_summary = client.sync_state().await.unwrap();
 
     let builder = AccountBuilder::new(init_seed)
         .account_type(config.account_type)
@@ -294,11 +312,18 @@ pub async fn create_basic_wallet_account(
         .with_auth_component(AuthRpoFalcon512::new(key_pair.public_key()))
         .with_component(BasicWallet);
 
-    let (account, seed) = builder.build().unwrap();
-    client.add_account(&account, Some(seed), false).await?;
+    let (account, seed) = builder
+        .build()
+        .context("Failed to build basic wallet account")?;
+
+    client
+        .add_account(&account, Some(seed), false)
+        .await
+        .context("Failed to add account to client")?;
+
     keystore
         .add_key(&AuthSecretKey::RpoFalcon512(key_pair))
-        .unwrap();
+        .context("Failed to add key to keystore")?;
 
     Ok(account)
 }

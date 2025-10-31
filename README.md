@@ -20,6 +20,7 @@ miden-project/
 ├── integration/                 # Integration crate (scripts + tests)
 │   ├── src/
 │   │   ├── bin/                 # Rust binaries for on-chain interactions
+│   │   ├── config.rs            # Temporary config file (do not modify!)
 │   │   ├── helpers.rs           # Temporary helper file (do not modify!)
 │   │   └── lib.rs
 │   └── tests/                   # Test files
@@ -70,16 +71,6 @@ Binaries are used for deploying contracts and performing on-chain interactions. 
 2. Write your binary code as a standard Rust executable with a `main()` function
 3. Run the binary using the commands shown below
 
-Example binary structure:
-
-```rust
-// integration/src/bin/deploy_contract.rs
-fn main() {
-    println!("Deploying contract...");
-    // Your deployment logic here
-}
-```
-
 ## **Testing Your Contracts**
 
 Tests are located in `integration/tests/`. To add a new test:
@@ -87,17 +78,6 @@ Tests are located in `integration/tests/`. To add a new test:
 1. Create a new test file in `integration/tests/` (e.g., `my_contract_test.rs`)
 2. Write your test functions using the standard Rust testing framework
 3. Run tests using the commands shown below
-
-Example test structure:
-
-```rust
-// integration/tests/my_contract_test.rs
-#[test]
-fn test_my_contract() {
-    // Your test logic here
-    assert_eq!(1 + 1, 2);
-}
-```
 
 ## **Commands**
 
