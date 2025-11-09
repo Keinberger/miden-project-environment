@@ -1,27 +1,22 @@
 use integration::helpers::{
-    build_project_in_dir, create_account_from_package, create_basic_wallet_account,
-    create_note_from_package, setup_client, AccountCreationConfig, ClientSetup, NoteCreationConfig,
+    build_project_in_dir, create_testing_account_from_package, create_testing_note_from_package,
+    AccountCreationConfig, NoteCreationConfig,
 };
 
-use miden_client::{
-    account::StorageMap,
-    transaction::{OutputNote, TransactionRequestBuilder},
-    Felt, Word,
-};
+use miden_client::{account::StorageMap, transaction::OutputNote, Felt, Word};
+use miden_testing::{Auth, MockChain, TransactionContextBuilder};
 use std::{path::Path, sync::Arc};
 
 #[tokio::test]
-async fn test_increment_count() -> anyhow::Result<()> {
+async fn counter_test() -> anyhow::Result<()> {
     // Test that after executing the increment note, the counter value is incremented by 1
-    let ClientSetup {
-        mut client,
-        keystore,
-    } = setup_client().await?;
+    let mut builder = MockChain::builder();
 
-    client.sync_state().await?;
+    // Crate note sender account
+    let sender = builder.add_existing_wallet(Auth::BasicAuth)?;
 
     // Build contracts
-    let counter_package = Arc::new(build_project_in_dir(
+    let contract_package = Arc::new(build_project_in_dir(
         Path::new("../contracts/counter-account"),
         true,
     )?);
@@ -40,64 +35,57 @@ async fn test_increment_count() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    // create counter account
-    let mut counter_account =
-        create_account_from_package(&mut client, counter_package.clone(), counter_cfg).await?;
+    // create testing counter account
+    let counter_account =
+        create_testing_account_from_package(contract_package.clone(), counter_cfg).await?;
 
-    // Create a separate sender account using only the BasicWallet component
-    let sender_cfg = AccountCreationConfig::default();
-    let sender_account =
-        create_basic_wallet_account(&mut client, keystore.clone(), sender_cfg).await?;
-
-    // build increment note
-    let counter_note = create_note_from_package(
-        &mut client,
+    // create testing increment note
+    let counter_note = create_testing_note_from_package(
         note_package.clone(),
-        sender_account.id(),
+        sender.id(),
         NoteCreationConfig::default(),
     )?;
 
-    // build and submit transaction to publish note
-    let note_publish_request = TransactionRequestBuilder::new()
-        .own_output_notes(vec![OutputNote::Full(counter_note.clone())])
+    // add counter account and note to mockchain
+    builder.add_account(counter_account.clone())?;
+    builder.add_note(OutputNote::Full(counter_note.clone().into()));
+
+    // Build the mock chain
+    let mut mock_chain = builder.build()?;
+
+    // Get transaction inputs (for increment the count)
+    let tx_inputs = mock_chain.get_transaction_inputs(
+        counter_account.clone(),
+        None,
+        &[counter_note.id()],
+        &[],
+    )?;
+
+    // Build the transaction context
+    let tx_context = TransactionContextBuilder::new(counter_account.clone())
+        .account_seed(None)
+        .tx_inputs(tx_inputs)
         .build()?;
-    let note_publish_tx_result = client
-        .new_transaction(sender_account.id(), note_publish_request)
-        .await?;
-    client
-        .submit_transaction(note_publish_tx_result.clone())
-        .await?;
-    client.sync_state().await?;
 
-    let consume_note_request = TransactionRequestBuilder::new()
-        .unauthenticated_input_notes([(counter_note.clone(), None)])
-        .build()?;
+    // Execute the transaction
+    let executed_transaction = tx_context.execute().await?;
 
-    let consume_tx_result = client
-        .new_transaction(counter_account.id(), consume_note_request)
-        .await?;
+    // Add the executed transaction to the mockchain
+    let updated_counter_account =
+        mock_chain.add_pending_executed_transaction(&executed_transaction)?;
 
-    client.submit_transaction(consume_tx_result.clone()).await?;
-
-    client.sync_state().await?;
-
-    let counter_account_record = client
-        .get_account(counter_account.id())
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Counter account not found after transaction"))?;
-
-    counter_account = counter_account_record.account().clone();
-
-    let count = counter_account
+    // Get the count from the updated counter account
+    let count = updated_counter_account
         .storage()
         .get_map_item(0, count_storage_key)?;
 
-    // Assert that the count value is equal to 1 after consuming the note
+    // Assert that the count value is equal to 1 after executing the transaction
     assert_eq!(
         count,
         Word::from([Felt::new(0), Felt::new(0), Felt::new(0), Felt::new(1)]),
         "Count value is not equal to 1"
     );
+
     println!("Test passed!");
     Ok(())
 }

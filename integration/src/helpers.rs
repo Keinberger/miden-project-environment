@@ -19,7 +19,7 @@ use miden_client::{
     },
     rpc::{Endpoint, TonicRpcClient},
     utils::Deserializable,
-    Client,
+    Client, Word,
 };
 use miden_core::{Felt, FieldElement};
 use miden_mast_package::Package;
@@ -218,6 +218,24 @@ pub async fn create_account_from_package(
     Ok(account)
 }
 
+pub async fn create_testing_account_from_package(
+    package: Arc<Package>,
+    config: AccountCreationConfig,
+) -> Result<Account> {
+    let account_component = account_component_from_package(package, &config)
+        .context("Failed to create account component from package")?;
+
+    let account = AccountBuilder::new([3u8; 32])
+        .account_type(config.account_type)
+        .storage_mode(config.storage_mode)
+        .with_component(account_component)
+        .with_auth_component(NoAuth)
+        .build_existing()
+        .context("Failed to build account")?;
+
+    Ok(account)
+}
+
 /// Configuration for creating a note
 pub struct NoteCreationConfig {
     pub note_type: NoteType,
@@ -269,6 +287,37 @@ pub fn create_note_from_package(
     );
 
     let serial_num = client.rng().draw_word();
+    let note_inputs = NoteInputs::new(config.inputs).context("Failed to create note inputs")?;
+    let recipient = NoteRecipient::new(serial_num, note_script, note_inputs);
+
+    let metadata = NoteMetadata::new(
+        sender_id,
+        config.note_type,
+        config.tag,
+        config.execution_hint,
+        config.aux,
+    )
+    .context("Failed to create note metadata")?;
+
+    Ok(Note::new(config.assets, metadata, recipient))
+}
+
+pub fn create_testing_note_from_package(
+    package: Arc<Package>,
+    sender_id: AccountId,
+    config: NoteCreationConfig,
+) -> Result<Note> {
+    let note_program = package.unwrap_program();
+    let note_script = NoteScript::from_parts(
+        note_program.mast_forest().clone(),
+        note_program.entrypoint(),
+    );
+
+    // get 4 random u64s and convert them to a word
+    let random_u64s = [0_u64; 4];
+    let serial_num =
+        Word::try_from(random_u64s).context("Failed to convert random u64s to word")?;
+
     let note_inputs = NoteInputs::new(config.inputs).context("Failed to create note inputs")?;
     let recipient = NoteRecipient::new(serial_num, note_script, note_inputs);
 
