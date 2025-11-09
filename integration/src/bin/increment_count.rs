@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
     println!("Latest block: {}", sync_summary.block_num);
 
     // Build contracts
-    let contract_package = Arc::new(
+    let counter_package = Arc::new(
         build_project_in_dir(Path::new("../contracts/counter-account"), true)
             .context("Failed to build counter account contract")?,
     );
@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
 
     // create counter account
     let counter_account =
-        create_account_from_package(&mut client, contract_package.clone(), counter_cfg)
+        create_account_from_package(&mut client, counter_package.clone(), counter_cfg)
             .await
             .context("Failed to create counter account")?;
 
