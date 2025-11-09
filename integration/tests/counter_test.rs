@@ -21,7 +21,7 @@ async fn test_increment_count() -> anyhow::Result<()> {
     client.sync_state().await?;
 
     // Build contracts
-    let contract_package = Arc::new(build_project_in_dir(
+    let counter_package = Arc::new(build_project_in_dir(
         Path::new("../contracts/counter-account"),
         true,
     )?);
@@ -42,7 +42,7 @@ async fn test_increment_count() -> anyhow::Result<()> {
 
     // create counter account
     let mut counter_account =
-        create_account_from_package(&mut client, contract_package.clone(), counter_cfg).await?;
+        create_account_from_package(&mut client, counter_package.clone(), counter_cfg).await?;
 
     // Create a separate sender account using only the BasicWallet component
     let sender_cfg = AccountCreationConfig::default();
